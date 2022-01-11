@@ -16,7 +16,7 @@ namespace GameDevWithLukas
 
 
         [Header("Force Applicator")]
-        [SerializeField, Range(0f, 2f)] protected float _moveSpeed = 0.2f;
+        [SerializeField, Range(0f, 15f)] protected float _moveSpeed = 0.2f;
         [SerializeField, Range(0f, 50f)] protected float _rotateSpeed = 15f;
         [SerializeField] protected bool _pureRotationPhysics = true;
         [SerializeField, Range(0f, 0.3f)] protected float _isGroundedTolerance = 0.1f;
@@ -27,6 +27,7 @@ namespace GameDevWithLukas
 
         [Header("Input")]
         protected float2 _moveInput;
+        protected float3 _moveDirection;
         [SerializeField] protected bool isIdle;
         protected const string _HorizontalInputValue = "Horizontal";
         protected const string _VerticalInputValue = "Vertical";
@@ -37,7 +38,6 @@ namespace GameDevWithLukas
         [SerializeField, Range(0f, 10f)] protected float _CameraSmoothing = 5f;
 
 
-        protected float3 _moveDirection;
 
         protected virtual void Start()
         {
