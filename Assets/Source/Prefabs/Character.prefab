@@ -183,8 +183,13 @@ MonoBehaviour:
   _CharacterCollider: {fileID: 2198148434247080716}
   _CameraFollowTransform: {fileID: 2198148435045946503}
   _camBrain: {fileID: 0}
-  _moveSpeed: 0.2
+  _moveSpeed: 10
+  _moveForceMode: 2
+  _moveGroundDrag: 0
+  _moveAirDrag: 0
   _rotateSpeed: 20
+  _rotateForceMode: 2
+  _rotateDrag: 5
   _pureRotationPhysics: 1
   _isGroundedRayTolerance: 0.1
   _isGroundedUpForce: 1

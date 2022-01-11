@@ -16,8 +16,13 @@ namespace GameDevWithLukas
 
 
         [Header("Force Applicator")]
-        [SerializeField, Range(0f, 15f)] protected float _moveSpeed = 0.2f;
+        [SerializeField, Range(0f, 15f)] protected float _moveSpeed = 1f;
+        [SerializeField] protected ForceMode _moveForceMode = ForceMode.Acceleration;
+        [SerializeField, Range(0f, 15f)] protected float _moveGroundDrag = 1f;
+        [SerializeField, Range(0f, 15f)] protected float _moveAirDrag = 1f;
         [SerializeField, Range(0f, 50f)] protected float _rotateSpeed = 20f;
+        [SerializeField] protected ForceMode _rotateForceMode = ForceMode.VelocityChange;
+        [SerializeField, Range(0f, 50f)] protected float _rotateDrag = 5f;
         [SerializeField] protected bool _pureRotationPhysics = true;
         [SerializeField, Range(0f, 0.3f)] protected float _isGroundedRayTolerance = 0.1f;
         //[SerializeField, Range(0f, 1f)] protected float _isGroundedRayRadius = 0.3f; // USUALLY THE RADIUS OF YOUR CAPSULE COLLIDER .... 
@@ -72,8 +77,9 @@ namespace GameDevWithLukas
             Grounding(_deltaTime);
             Move(_deltaTime);
             Rotate(_deltaTime);
+            Drag(_deltaTime);
 
-
+            // NEED TO BE IN FIXED UPDATE BECAUSE OF PHYSICS MOVEMENT
             UpdateCamera(_deltaTime);
 
         }
@@ -119,55 +125,6 @@ namespace GameDevWithLukas
             }
         }
 
-
-        void Move(float _deltaTime)
-        {
-            if (_CharacterRigidbody == null) return;
-            if (!_isGrounded) return;
-
-            float3 offset = (_PreProcessorTransform.position.ToFloat3() + (_moveDirection * _moveSpeed)) - _PreProcessorTransform.position.ToFloat3();
-
-            float3 velocity = offset / _deltaTime;
-
-            float3 force = -_CharacterRigidbody.velocity.ToFloat3() + offset + velocity;
-            force /= 1f + offset.SqrMagnitude() * 5f;
-
-            force.y = 0f;
-
-            _CharacterRigidbody.AddForce(force, ForceMode.VelocityChange);
-        }
-
-        void Rotate(float _deltaTime)
-        {
-            if (_CharacterRigidbody == null) return;
-
-            float wantedYaw = Helper.GetYawOfQuaternion(_camBrain.transform.rotation);
-
-            if (_pureRotationPhysics)
-            {
-                if (_CharacterRigidbody.freezeRotation == true) _CharacterRigidbody.freezeRotation = false;
-
-                float3 currentDirection = math.normalize(new float3(_CharacterRigidbody.transform.forward.x, 0f, _CharacterRigidbody.transform.forward.z));
-                float3 wantedDirectionFacing = math.normalize(math.mul(Quaternion.AngleAxis(wantedYaw, Helper.Up), Helper.Forward));
-
-                Quaternion wantedFacing = Quaternion.FromToRotation(currentDirection, wantedDirectionFacing);
-                Quaternion wantedUp = Quaternion.FromToRotation(_CharacterRigidbody.transform.up, Helper.Up);
-
-                float3 wantedTorque = (new float3(wantedFacing.x, wantedFacing.y, wantedFacing.z) + new float3(wantedUp.x, wantedUp.y, wantedUp.z)) * _rotateSpeed * 4f;
-
-                _CharacterRigidbody.AddTorque(wantedTorque, ForceMode.VelocityChange);
-            }
-            else // IF YOU LIKE MORE CONTROL OVER THE ROTATION
-            {
-                if (_CharacterRigidbody.freezeRotation == false) _CharacterRigidbody.freezeRotation = true;
-
-                Quaternion wantedRotation = Quaternion.AngleAxis(wantedYaw, Helper.Up);
-
-                _CharacterRigidbody.rotation = Quaternion.Lerp(_CharacterRigidbody.rotation, wantedRotation, _rotateSpeed * _deltaTime);
-            }
-        }
-
-
         void Grounding(float _deltaTime)
         {
             if (_CharacterCollider == null) return;
@@ -202,6 +159,70 @@ namespace GameDevWithLukas
                     _CharacterRigidbody.velocity = velocity;
                 }
             }
+        }
+
+
+        void Move(float _deltaTime)
+        {
+            if (_CharacterRigidbody == null) return;
+            if (!_isGrounded) return;
+
+            float calulatedSpeed = _moveSpeed * _deltaTime;
+
+            float3 offset = (_PreProcessorTransform.position.ToFloat3() + (_moveDirection * calulatedSpeed)) - _PreProcessorTransform.position.ToFloat3();
+
+            float3 velocity = offset / _deltaTime;
+
+            float3 force = -_CharacterRigidbody.velocity.ToFloat3() + offset + velocity;
+            force /= 1f + offset.SqrMagnitude() * 5f;
+
+            force.y = 0f;
+
+            _CharacterRigidbody.AddForce(force, _moveForceMode);
+        }
+
+        void Rotate(float _deltaTime)
+        {
+            if (_CharacterRigidbody == null) return;
+
+            float wantedYaw = Helper.GetYawOfQuaternion(_camBrain.transform.rotation);
+
+            if (_pureRotationPhysics)
+            {
+                if (_CharacterRigidbody.freezeRotation == true) _CharacterRigidbody.freezeRotation = false;
+
+                float3 currentDirection = math.normalize(new float3(_CharacterRigidbody.transform.forward.x, 0f, _CharacterRigidbody.transform.forward.z));
+                float3 wantedDirectionFacing = math.normalize(math.mul(Quaternion.AngleAxis(wantedYaw, Helper.Up), Helper.Forward));
+
+                Quaternion wantedFacing = Quaternion.FromToRotation(currentDirection, wantedDirectionFacing);
+                Quaternion wantedUp = Quaternion.FromToRotation(_CharacterRigidbody.transform.up, Helper.Up);
+
+                float3 wantedTorque = (new float3(wantedFacing.x, wantedFacing.y, wantedFacing.z) + new float3(wantedUp.x, wantedUp.y, wantedUp.z)) * _rotateSpeed * 4f;
+
+                _CharacterRigidbody.AddTorque(wantedTorque, _rotateForceMode);
+            }
+            else // IF YOU LIKE MORE CONTROL OVER THE ROTATION
+            {
+                if (_CharacterRigidbody.freezeRotation == false) _CharacterRigidbody.freezeRotation = true;
+
+                Quaternion wantedRotation = Quaternion.AngleAxis(wantedYaw, Helper.Up);
+
+                _CharacterRigidbody.rotation = Quaternion.Lerp(_CharacterRigidbody.rotation, wantedRotation, _rotateSpeed * _deltaTime);
+            }
+        }
+
+        void Drag(float _deltaTime)
+        {
+            if (_CharacterRigidbody == null) return;
+
+            // MOVE
+            if (_CharacterRigidbody.drag != 0f) _CharacterRigidbody.drag = 0f;
+            float3 wantedVel = Helper.Up * _CharacterRigidbody.velocity.y;
+            if (_isGrounded) _CharacterRigidbody.velocity = math.lerp(_CharacterRigidbody.velocity, wantedVel, math.clamp(_moveGroundDrag * _deltaTime, 0f, 1f));
+            else if (!_isGrounded) _CharacterRigidbody.velocity = math.lerp(_CharacterRigidbody.velocity, wantedVel, math.clamp(_moveAirDrag * _deltaTime, 0f, 1f));
+
+            // ROTATE
+            if (_CharacterRigidbody.angularDrag != _rotateDrag) _CharacterRigidbody.angularDrag = _rotateDrag;
         }
     }
 }
