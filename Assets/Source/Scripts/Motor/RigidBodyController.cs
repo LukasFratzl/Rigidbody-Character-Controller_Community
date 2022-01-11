@@ -17,11 +17,12 @@ namespace GameDevWithLukas
 
         [Header("Force Applicator")]
         [SerializeField, Range(0f, 15f)] protected float _moveSpeed = 0.2f;
-        [SerializeField, Range(0f, 50f)] protected float _rotateSpeed = 15f;
+        [SerializeField, Range(0f, 50f)] protected float _rotateSpeed = 20f;
         [SerializeField] protected bool _pureRotationPhysics = true;
-        [SerializeField, Range(0f, 0.3f)] protected float _isGroundedTolerance = 0.1f;
+        [SerializeField, Range(0f, 0.3f)] protected float _isGroundedRayTolerance = 0.1f;
+        //[SerializeField, Range(0f, 1f)] protected float _isGroundedRayRadius = 0.3f; // USUALLY THE RADIUS OF YOUR CAPSULE COLLIDER .... 
+        [SerializeField, Range(0f, 3f)] protected float _isGroundedUpForce = 1f;
         [SerializeField] protected LayerMask _isGroundedLayer;
-        [SerializeField] protected float _isGroundedUpForce = 1f;
 
         [SerializeField] protected bool _isGrounded;
 
@@ -50,7 +51,7 @@ namespace GameDevWithLukas
             {
                 _camFraming = (_camBrain.ActiveVirtualCamera as CinemachineVirtualCamera)?.GetCinemachineComponent<CinemachineFramingTransposer>();
 
-                UpdateCamera(Time.deltaTime, 1f);
+                UpdateCamera(Time.deltaTime);
             }
         }
 
@@ -63,25 +64,17 @@ namespace GameDevWithLukas
             UpdateLocomotion(_deltaTime);
         }
 
-        float lastTimeTimeFixed;
-
         protected virtual void FixedUpdate()
         {
             // DELTA TIME
             float _deltaTime = Time.fixedDeltaTime;
 
-            // INTERPOLATION TIME
-            float _currentTime = Time.time;
-            if (lastTimeTimeFixed == 0f) lastTimeTimeFixed = _currentTime;
-            float wantedInterpolationTimeFixedUpdate = (_currentTime - lastTimeTimeFixed) / _deltaTime;
-            lastTimeTimeFixed = _currentTime;
-
-            Grounding(_deltaTime, wantedInterpolationTimeFixedUpdate);
+            Grounding(_deltaTime);
             Move(_deltaTime);
-            Rotate(_deltaTime, wantedInterpolationTimeFixedUpdate);
+            Rotate(_deltaTime);
 
 
-            UpdateCamera(_deltaTime, wantedInterpolationTimeFixedUpdate);
+            UpdateCamera(_deltaTime);
 
         }
 
@@ -101,18 +94,13 @@ namespace GameDevWithLukas
         protected float _defaultCameraFollowOffsetY;
         protected bool _previousIsThirdPerson;
 
-        protected virtual void UpdateCamera(float _deltaTime, float _interpolationTime)
+        protected virtual void UpdateCamera(float _deltaTime)
         {
             if (_CameraFollowTransform == null) return;
 
             float3 wantedPos = math.mul(_PreProcessorTransform.rotation, Helper.Up * _defaultCameraFollowOffsetY) + _PreProcessorTransform.position.ToFloat3();
 
-            float3 previousPosition = _CameraFollowTransform.position; // NEEDED FOR INTERPOLATION
-
             _CameraFollowTransform.position = _applyCameraSmoothing ? math.lerp(_CameraFollowTransform.position, wantedPos, math.clamp(_CameraSmoothing * _deltaTime, 0f, 1f)) : wantedPos;
-
-            // LERPING THE INTERPOLATION TIME TO ALWAYS TRAVEL AT THE SAME RELATIVE FRAME SPEED
-            _CameraFollowTransform.position = math.lerp(previousPosition, _CameraFollowTransform.position, _interpolationTime);
 
             if (_camBrain != null)
             {
@@ -149,7 +137,7 @@ namespace GameDevWithLukas
             _CharacterRigidbody.AddForce(force, ForceMode.VelocityChange);
         }
 
-        void Rotate(float _deltaTime, float _interpolationTime)
+        void Rotate(float _deltaTime)
         {
             if (_CharacterRigidbody == null) return;
 
@@ -175,46 +163,39 @@ namespace GameDevWithLukas
 
                 Quaternion wantedRotation = Quaternion.AngleAxis(wantedYaw, Helper.Up);
 
-                Quaternion previousRotation = _CharacterRigidbody.rotation; // NEEDED FOR INTERPOLATION
-
-                Quaternion calulatedRotation = Quaternion.Lerp(_CharacterRigidbody.rotation, wantedRotation, _rotateSpeed * _deltaTime);
-
-                // LERPING THE INTERPOLATION TIME TO ALWAYS TRAVEL AT THE SAME RELATIVE FRAME SPEED
-                _CharacterRigidbody.rotation = _PreProcessorTransform.rotation = Quaternion.Lerp(previousRotation, calulatedRotation, _interpolationTime);
+                _CharacterRigidbody.rotation = Quaternion.Lerp(_CharacterRigidbody.rotation, wantedRotation, _rotateSpeed * _deltaTime);
             }
         }
 
-        void Grounding(float _deltaTime, float _interpolationTime)
+
+        void Grounding(float _deltaTime)
         {
             if (_CharacterCollider == null) return;
             if (_CharacterRigidbody == null) return;
 
             float distance = math.distance(_PreProcessorTransform.position, _CharacterCollider.bounds.center);
 
-            distance += _isGroundedTolerance;
+            distance += _isGroundedRayTolerance;
 
             RaycastHit _isGroundedHit;
             _isGrounded = Physics.Raycast(_CharacterCollider.bounds.center, -_PreProcessorTransform.up, out _isGroundedHit, distance, _isGroundedLayer, QueryTriggerInteraction.Ignore);
 
+
             if (_isGrounded)
             {
-                if (_isGroundedHit.point.y > _PreProcessorTransform.position.y)
+                if (_isGroundedHit.point.y > _CharacterRigidbody.position.y)
                 {
-
-                    float localY = _isGroundedHit.point.y - _PreProcessorTransform.position.y;
+                    float localY = _isGroundedHit.point.y - _CharacterRigidbody.position.y;
 
                     float velocityP = localY + (localY / _deltaTime);
                     velocityP /= 1f + (Helper.Up * localY).SqrMagnitude() * 5f; // PRETTY DAMN EPIC
 
 
-                    float3 wantedDelta = math.mul(_PreProcessorTransform.rotation, Helper.Up * math.lerp(0f, localY, math.clamp(_isGroundedUpForce * velocityP * _deltaTime, 0f, 1f)));
+                    float3 wantedDelta = math.mul(_CharacterRigidbody.rotation, Helper.Up * math.lerp(0f, localY, math.clamp(_isGroundedUpForce * velocityP * _deltaTime, 0f, 1f)));
 
-                    float3 previousPosition = _PreProcessorTransform.position; // NEEDED FOR INTERPOLATION
+                    float3 wantedFinalPos = _CharacterRigidbody.position.ToFloat3() + wantedDelta;
 
-                    float3 wantedFinalPos = _PreProcessorTransform.position.ToFloat3() + wantedDelta;
-
-                    // LERPING THE INTERPOLATION TIME TO ALWAYS TRAVEL AT THE SAME RELATIVE FRAME SPEED
-                    _PreProcessorTransform.position = _CharacterRigidbody.position = math.lerp(previousPosition, wantedFinalPos, _interpolationTime);
+                    _CharacterRigidbody.position = wantedFinalPos;
 
                     float3 velocity = _CharacterRigidbody.velocity;
                     velocity.y = 0f;

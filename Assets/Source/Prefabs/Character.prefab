@@ -184,13 +184,13 @@ MonoBehaviour:
   _CameraFollowTransform: {fileID: 2198148435045946503}
   _camBrain: {fileID: 0}
   _moveSpeed: 0.2
-  _rotateSpeed: 15
+  _rotateSpeed: 20
   _pureRotationPhysics: 1
-  _isGroundedTolerance: 0.1
+  _isGroundedRayTolerance: 0.1
+  _isGroundedUpForce: 1
   _isGroundedLayer:
     serializedVersion: 2
     m_Bits: 1
-  _isGroundedUpForce: 1
   _isGrounded: 0
   isIdle: 0
   isThirdPerson: 1
