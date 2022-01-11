@@ -11,15 +11,17 @@ namespace GameDevWithLukas
         [SerializeField] protected Transform _PreProcessorTransform;
         [SerializeField] protected Collider _CharacterCollider;
         [SerializeField] protected Transform _CameraFollowTransform;
+        [SerializeField] protected Transform _CameraFollowTargetTransform;
         [SerializeField] protected CinemachineBrain _camBrain;
         protected CinemachineFramingTransposer _camFraming;
+        [SerializeField] protected MeshRenderer[] _RenderersToCullOnFirstPersonMode;
 
 
         [Header("Force Applicator")]
-        [SerializeField, Range(0f, 15f)] protected float _moveSpeed = 1f;
-        [SerializeField] protected ForceMode _moveForceMode = ForceMode.Acceleration;
-        [SerializeField, Range(0f, 15f)] protected float _moveGroundDrag = 1f;
-        [SerializeField, Range(0f, 15f)] protected float _moveAirDrag = 1f;
+        [SerializeField, Range(0f, 20f)] protected float _moveSpeed = 10f;
+        [SerializeField] protected ForceMode _moveForceMode = ForceMode.VelocityChange;
+        [SerializeField, Range(0f, 15f)] protected float _moveGroundDrag = 0f;
+        [SerializeField, Range(0f, 15f)] protected float _moveAirDrag = 0f;
         [SerializeField, Range(0f, 50f)] protected float _rotateSpeed = 20f;
         [SerializeField] protected ForceMode _rotateForceMode = ForceMode.VelocityChange;
         [SerializeField, Range(0f, 50f)] protected float _rotateDrag = 5f;
@@ -47,7 +49,6 @@ namespace GameDevWithLukas
 
         protected virtual void Start()
         {
-            if (_CameraFollowTransform != null) _defaultCameraFollowOffsetY = _CameraFollowTransform.position.y - _PreProcessorTransform.position.y;
             if (_CharacterRigidbody != null)
             {
                 _CharacterRigidbody.freezeRotation = !_pureRotationPhysics;
@@ -56,7 +57,7 @@ namespace GameDevWithLukas
             {
                 _camFraming = (_camBrain.ActiveVirtualCamera as CinemachineVirtualCamera)?.GetCinemachineComponent<CinemachineFramingTransposer>();
 
-                UpdateCamera(Time.deltaTime);
+                UpdateCamera(Time.deltaTime, force: true);
             }
         }
 
@@ -97,24 +98,28 @@ namespace GameDevWithLukas
         }
 
 
-        protected float _defaultCameraFollowOffsetY;
+        //protected float _defaultCameraFollowOffsetY;
         protected bool _previousIsThirdPerson;
 
-        protected virtual void UpdateCamera(float _deltaTime)
+        protected virtual void UpdateCamera(float _deltaTime, bool force = false)
         {
             if (_CameraFollowTransform == null) return;
+            if (_CameraFollowTargetTransform == null) return;
 
-            float3 wantedPos = math.mul(_PreProcessorTransform.rotation, Helper.Up * _defaultCameraFollowOffsetY) + _PreProcessorTransform.position.ToFloat3();
+            float3 wantedPos = _CameraFollowTargetTransform.position;
+            Quaternion wantedRot = _CameraFollowTargetTransform.rotation;
 
             _CameraFollowTransform.position = _applyCameraSmoothing ? math.lerp(_CameraFollowTransform.position, wantedPos, math.clamp(_CameraSmoothing * _deltaTime, 0f, 1f)) : wantedPos;
+            _CameraFollowTransform.rotation = _applyCameraSmoothing ? Quaternion.Lerp(_CameraFollowTransform.rotation, wantedRot, math.clamp(_CameraSmoothing * _deltaTime, 0f, 1f)) : wantedRot;
 
             if (_camBrain != null)
             {
+                // if (_camBrain.m_WorldUpOverride != _CameraFollowTargetTransform) _camBrain.m_WorldUpOverride = _CameraFollowTargetTransform;
                 if (_camBrain.m_UpdateMethod != CinemachineBrain.UpdateMethod.ManualUpdate) _camBrain.m_UpdateMethod = CinemachineBrain.UpdateMethod.ManualUpdate;
                 _camBrain.ManualUpdate();
             }
 
-            if (_previousIsThirdPerson != isThirdPerson)
+            if (_previousIsThirdPerson != isThirdPerson || force)
             {
                 _previousIsThirdPerson = isThirdPerson;
 
@@ -122,6 +127,14 @@ namespace GameDevWithLukas
                 _applyCameraSmoothing = isThirdPerson;
 
                 if (_camFraming != null) _camFraming.m_CameraDistance = wantedCameraDistance;
+
+                if (_RenderersToCullOnFirstPersonMode != null)
+                {
+                    for (int r = 0; r < _RenderersToCullOnFirstPersonMode.Length; r++)
+                    {
+                        _RenderersToCullOnFirstPersonMode[r].enabled = isThirdPerson;
+                    }
+                }
             }
         }
 
