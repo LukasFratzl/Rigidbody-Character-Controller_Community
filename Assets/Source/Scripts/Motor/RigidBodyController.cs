@@ -224,7 +224,7 @@ namespace GameDevWithLukas
             if (isStrafeRuntime != _previousStrafe && isStrafeRuntime == false) _moveDirection = math.mul(Quaternion.AngleAxis(Helper.GetYawOfQuaternion(_PreProcessorTransform.rotation), Helper.Up), Helper.Forward);
             _previousStrafe = isStrafeRuntime;
 
-            float wantedYaw = isStrafe ? Helper.GetYawOfQuaternion(_camBrain.transform.rotation) : Helper.GetYawOfDirection(_moveDirection);
+            float wantedYaw = isStrafeRuntime ? Helper.GetYawOfQuaternion(_camBrain.transform.rotation) : Helper.GetYawOfDirection(_moveDirection);
 
             if (_pureRotationPhysics)
             {
