@@ -211,7 +211,8 @@ namespace GameDevWithLukas
 
             force.y = 0f;
 
-            _CharacterRigidbody.AddForce(force, _moveForceMode);
+            if (float.IsNaN(force.x) == false && float.IsNaN(force.z) == false)
+                _CharacterRigidbody.AddForce(force, _moveForceMode);
         }
 
         void Rotate(float _deltaTime)
