@@ -210,8 +210,9 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 1
   _isGrounded: 0
-  isIdle: 0
+  isInputIdle: 0
   isThirdPerson: 1
+  isStrafe: 0
   _applyCameraSmoothing: 1
   _CameraSmoothing: 5
 --- !u!54 &9148007789408725217

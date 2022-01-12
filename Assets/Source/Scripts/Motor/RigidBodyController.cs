@@ -36,10 +36,12 @@ namespace GameDevWithLukas
         [Header("Input")]
         protected float2 _moveInput;
         protected float3 _moveDirection;
-        [SerializeField] protected bool isIdle;
+        [SerializeField] protected bool isInputIdle;
         protected const string _HorizontalInputValue = "Horizontal";
         protected const string _VerticalInputValue = "Vertical";
         [SerializeField] protected bool isThirdPerson = true;
+        [SerializeField] protected bool isStrafe = false;
+        //[SerializeField, Range(0f, 10f)] protected float _inputRotationSpeed = 2f;
 
         [Header("Camera Tweaks")]
         [SerializeField] protected bool _applyCameraSmoothing = true;
@@ -87,14 +89,32 @@ namespace GameDevWithLukas
 
         protected virtual void UpdateInput(float _deltaTime)
         {
-            _moveInput = new float2(Input.GetAxisRaw(_HorizontalInputValue), Input.GetAxisRaw(_VerticalInputValue));
+            _moveInput = new float2(Input.GetAxis(_HorizontalInputValue), Input.GetAxis(_VerticalInputValue));
 
-            isIdle = math.abs(math.length(_moveInput)) < Helper.Epsilon;
+            isInputIdle = math.abs(math.length(_moveInput)) < Helper.Epsilon;
         }
+
+        // Quaternion inputRotation;
+        private bool _previousStrafe;
 
         protected virtual void UpdateLocomotion(float _deltaTime) // APPLY
         {
-            _moveDirection = isIdle || !_isGrounded ? float3.zero : math.mul(_PreProcessorTransform.rotation, new float3(_moveInput.x, 0f, _moveInput.y));
+            bool isStrafeRuntime = isThirdPerson == false || isStrafe;
+
+            Quaternion wantedInputRotation = _PreProcessorTransform.rotation;
+            if (isStrafeRuntime == false)
+            {
+                float wantedCameraYaw = Helper.GetYawOfQuaternion(_camBrain.transform.rotation);
+
+                //Quaternion inputRotation = Quaternion.LookRotation(math.normalize(math.mul(_PreProcessorTransform.rotation, new float3(_moveInput.x, 0f, _moveInput.y))));
+                Quaternion camerRotation = Quaternion.AngleAxis(wantedCameraYaw, Helper.Up);
+
+                wantedInputRotation = camerRotation;//math.mul(inputRotation, camerRotation);
+            }
+
+            // inputRotation = Quaternion.Lerp(inputRotation, wantedInputRotation, _inputRotationSpeed * _deltaTime);
+
+            _moveDirection = isInputIdle || !_isGrounded ? _moveDirection : math.mul(wantedInputRotation, new float3(_moveInput.x, 0f, _moveInput.y));
         }
 
 
@@ -180,9 +200,9 @@ namespace GameDevWithLukas
             if (_CharacterRigidbody == null) return;
             if (!_isGrounded) return;
 
-            float calulatedSpeed = _moveSpeed * _deltaTime;
+            float deltaSpeed = _moveSpeed * _deltaTime;
 
-            float3 offset = (_PreProcessorTransform.position.ToFloat3() + (_moveDirection * calulatedSpeed)) - _PreProcessorTransform.position.ToFloat3();
+            float3 offset = isInputIdle ? float3.zero : math.normalize(_moveDirection) * deltaSpeed;
 
             float3 velocity = offset / _deltaTime;
 
@@ -197,8 +217,14 @@ namespace GameDevWithLukas
         void Rotate(float _deltaTime)
         {
             if (_CharacterRigidbody == null) return;
+            if (isStrafe && _camBrain == null) return;
 
-            float wantedYaw = Helper.GetYawOfQuaternion(_camBrain.transform.rotation);
+            bool isStrafeRuntime = isThirdPerson == false || isStrafe;
+
+            if (isStrafeRuntime != _previousStrafe && isStrafeRuntime == false) _moveDirection = math.mul(Quaternion.AngleAxis(Helper.GetYawOfQuaternion(_PreProcessorTransform.rotation), Helper.Up), Helper.Forward);
+            _previousStrafe = isStrafeRuntime;
+
+            float wantedYaw = isStrafe ? Helper.GetYawOfQuaternion(_camBrain.transform.rotation) : Helper.GetYawOfDirection(_moveDirection);
 
             if (_pureRotationPhysics)
             {

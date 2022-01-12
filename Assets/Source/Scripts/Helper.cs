@@ -11,7 +11,7 @@ namespace GameDevWithLukas
         public static float3 Up = new float3(0f, 1f, 0f);
         public static float3 Forward = new float3(0f, 0f, 1f);
 
-        public static float GetYaw(float3 _direction)
+        public static float GetYawOfDirection(float3 _direction)
         {
             return math.degrees(math.atan2(_direction.x, _direction.z));
         }
