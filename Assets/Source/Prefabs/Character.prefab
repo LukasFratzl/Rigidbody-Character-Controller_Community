@@ -198,7 +198,6 @@ MonoBehaviour:
   - {fileID: 6647820526087509267}
   _moveSpeed: 10
   _moveForceMode: 2
-  _moveGroundDrag: 0
   _moveAirDrag: 0
   _rotateSpeed: 20
   _rotateForceMode: 2
@@ -209,11 +208,10 @@ MonoBehaviour:
   _isGroundedLayer:
     serializedVersion: 2
     m_Bits: 1
-  _isGrounded: 0
-  isInputIdle: 0
+  _jumpHeight: 1
+  _gravity: -9.81
   isThirdPerson: 1
   isStrafe: 0
-  _applyCameraSmoothing: 1
   _CameraSmoothing: 5
 --- !u!54 &9148007789408725217
 Rigidbody:

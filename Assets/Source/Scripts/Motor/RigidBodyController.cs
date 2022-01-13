@@ -20,32 +20,32 @@ namespace GameDevWithLukas
         [Header("Force Applicator")]
         [SerializeField, Range(0f, 20f)] protected float _moveSpeed = 10f;
         [SerializeField] protected ForceMode _moveForceMode = ForceMode.VelocityChange;
-        [SerializeField, Range(0f, 15f)] protected float _moveGroundDrag = 0f;
         [SerializeField, Range(0f, 15f)] protected float _moveAirDrag = 0f;
         [SerializeField, Range(0f, 50f)] protected float _rotateSpeed = 20f;
         [SerializeField] protected ForceMode _rotateForceMode = ForceMode.VelocityChange;
         [SerializeField, Range(0f, 50f)] protected float _rotateDrag = 5f;
         [SerializeField] protected bool _pureRotationPhysics = true;
         [SerializeField, Range(0f, 0.3f)] protected float _isGroundedRayTolerance = 0.1f;
-        //[SerializeField, Range(0f, 1f)] protected float _isGroundedRayRadius = 0.3f; // USUALLY THE RADIUS OF YOUR CAPSULE COLLIDER .... 
         [SerializeField, Range(0f, 3f)] protected float _isGroundedUpForce = 1f;
-        [SerializeField] protected LayerMask _isGroundedLayer;
-
-        [SerializeField] protected bool _isGrounded;
+        [SerializeField] protected LayerMask _isGroundedLayer = 1;
+        protected bool _isGrounded;
+        [SerializeField, Range(0f, 3f)] protected float _jumpHeight = 0.5f;
+        protected float _jumpForceRuntime;
+        [SerializeField, Range(-20, 20)] protected float _gravity = -9.81f; // -9.81 IS THE GRAVITY ON EARTH
 
         [Header("Input")]
-        protected float2 _moveInput;
-        protected float3 _moveDirection;
-        [SerializeField] protected bool isInputIdle;
-        protected const string _HorizontalInputValue = "Horizontal";
-        protected const string _VerticalInputValue = "Vertical";
         [SerializeField] protected bool isThirdPerson = true;
         [SerializeField] protected bool isStrafe = false;
-        //[SerializeField, Range(0f, 10f)] protected float _inputRotationSpeed = 2f;
+        protected float2 _moveInput;
+        protected float3 _moveDirection;
+        protected bool isInputIdle;
+        protected const string _HorizontalInputValue = "Horizontal";
+        protected const string _VerticalInputValue = "Vertical";
+        protected bool isStrafeRuntime { get { return isThirdPerson == false || isStrafe; } }
 
         [Header("Camera Tweaks")]
-        [SerializeField] protected bool _applyCameraSmoothing = true;
         [SerializeField, Range(0f, 10f)] protected float _CameraSmoothing = 5f;
+        protected bool _applyCameraSmoothing = true;
 
 
 
@@ -54,6 +54,7 @@ namespace GameDevWithLukas
             if (_CharacterRigidbody != null)
             {
                 _CharacterRigidbody.freezeRotation = !_pureRotationPhysics;
+                _CharacterRigidbody.useGravity = false;
             }
             if (_camBrain != null)
             {
@@ -61,6 +62,7 @@ namespace GameDevWithLukas
 
                 UpdateCamera(Time.deltaTime, force: true);
             }
+            _previousStrafe = isStrafeRuntime;
         }
 
 
@@ -78,7 +80,8 @@ namespace GameDevWithLukas
             float _deltaTime = Time.fixedDeltaTime;
 
             Grounding(_deltaTime);
-            Move(_deltaTime);
+            HorizontalMove(_deltaTime);
+            VerticalMove();
             Rotate(_deltaTime);
             Drag(_deltaTime);
 
@@ -92,33 +95,32 @@ namespace GameDevWithLukas
             _moveInput = new float2(Input.GetAxis(_HorizontalInputValue), Input.GetAxis(_VerticalInputValue));
 
             isInputIdle = math.abs(math.length(_moveInput)) < Helper.Epsilon;
+
+            if (_isGrounded && Input.GetKeyDown(KeyCode.Space) && _jumpForceRuntime <= 0f)
+            {
+                _jumpForceRuntime = math.sqrt(_jumpHeight * -2f * (_gravity));
+
+                _CharacterRigidbody.velocity = new float3(_CharacterRigidbody.velocity.x, _jumpForceRuntime, _CharacterRigidbody.velocity.z);
+            }
         }
 
-        // Quaternion inputRotation;
-        private bool _previousStrafe;
 
         protected virtual void UpdateLocomotion(float _deltaTime) // APPLY
         {
-            bool isStrafeRuntime = isThirdPerson == false || isStrafe;
-
             Quaternion wantedInputRotation = _PreProcessorTransform.rotation;
             if (isStrafeRuntime == false)
             {
                 float wantedCameraYaw = Helper.GetYawOfQuaternion(_camBrain.transform.rotation);
 
-                //Quaternion inputRotation = Quaternion.LookRotation(math.normalize(math.mul(_PreProcessorTransform.rotation, new float3(_moveInput.x, 0f, _moveInput.y))));
                 Quaternion camerRotation = Quaternion.AngleAxis(wantedCameraYaw, Helper.Up);
 
-                wantedInputRotation = camerRotation;//math.mul(inputRotation, camerRotation);
+                wantedInputRotation = camerRotation;
             }
-
-            // inputRotation = Quaternion.Lerp(inputRotation, wantedInputRotation, _inputRotationSpeed * _deltaTime);
 
             _moveDirection = isInputIdle || !_isGrounded ? _moveDirection : math.mul(wantedInputRotation, new float3(_moveInput.x, 0f, _moveInput.y));
         }
 
 
-        //protected float _defaultCameraFollowOffsetY;
         protected bool _previousIsThirdPerson;
 
         protected virtual void UpdateCamera(float _deltaTime, bool force = false)
@@ -134,7 +136,6 @@ namespace GameDevWithLukas
 
             if (_camBrain != null)
             {
-                // if (_camBrain.m_WorldUpOverride != _CameraFollowTargetTransform) _camBrain.m_WorldUpOverride = _CameraFollowTargetTransform;
                 if (_camBrain.m_UpdateMethod != CinemachineBrain.UpdateMethod.ManualUpdate) _camBrain.m_UpdateMethod = CinemachineBrain.UpdateMethod.ManualUpdate;
                 _camBrain.ManualUpdate();
             }
@@ -158,7 +159,7 @@ namespace GameDevWithLukas
             }
         }
 
-        void Grounding(float _deltaTime)
+        protected virtual void Grounding(float _deltaTime)
         {
             if (_CharacterCollider == null) return;
             if (_CharacterRigidbody == null) return;
@@ -167,35 +168,32 @@ namespace GameDevWithLukas
 
             distance += _isGroundedRayTolerance;
 
-            RaycastHit _isGroundedHit;
+            RaycastHit _isGroundedHit = default;
             _isGrounded = Physics.Raycast(_CharacterCollider.bounds.center, -_PreProcessorTransform.up, out _isGroundedHit, distance, _isGroundedLayer, QueryTriggerInteraction.Ignore);
 
 
             if (_isGrounded)
             {
-                if (_isGroundedHit.point.y > _CharacterRigidbody.position.y)
+                if (_isGroundedHit.point.y > _CharacterRigidbody.position.y && _jumpForceRuntime <= 0f)
                 {
                     float localY = _isGroundedHit.point.y - _CharacterRigidbody.position.y;
 
                     float velocityP = localY + (localY / _deltaTime);
                     velocityP /= 1f + (Helper.Up * localY).SqrMagnitude() * 5f; // PRETTY DAMN EPIC
 
+                    float3 wantedDelta = Helper.Up * math.lerp(0f, localY, math.clamp(_isGroundedUpForce * velocityP * _deltaTime, 0f, 1f));
 
-                    float3 wantedDelta = math.mul(_CharacterRigidbody.rotation, Helper.Up * math.lerp(0f, localY, math.clamp(_isGroundedUpForce * velocityP * _deltaTime, 0f, 1f)));
-
-                    float3 wantedFinalPos = _CharacterRigidbody.position.ToFloat3() + wantedDelta;
-
-                    _CharacterRigidbody.position = wantedFinalPos;
+                    _CharacterRigidbody.position += wantedDelta.ToVector3();
 
                     float3 velocity = _CharacterRigidbody.velocity;
-                    velocity.y = 0f;
+                    velocity.y = 0f; // BECAUSE WE SET THE VELOCITY HERE TO ZERO ...
                     _CharacterRigidbody.velocity = velocity;
                 }
             }
         }
 
 
-        void Move(float _deltaTime)
+        protected virtual void HorizontalMove(float _deltaTime)
         {
             if (_CharacterRigidbody == null) return;
             if (!_isGrounded) return;
@@ -215,12 +213,31 @@ namespace GameDevWithLukas
                 _CharacterRigidbody.AddForce(force, _moveForceMode);
         }
 
-        void Rotate(float _deltaTime)
+        protected virtual void VerticalMove()
+        {
+            // GRAVITY
+            _CharacterRigidbody.AddForce(Helper.Up * _gravity, ForceMode.Acceleration); // ACCELERATION BECAUSE GRAVITY IS AN ACCELERATION FORCE ...
+            float airFriction = 0.1f;
+            if (_CharacterRigidbody.velocity.y < (_gravity + airFriction)) // IF WE REACH THE MAX GRAVITY VELOCITY WE DON'T WANT ACCELERATE MORE TO HAVE REALISTIC GRAVITY ON A PLANET WITH AIR
+            {
+                float3 velocity = _CharacterRigidbody.velocity;
+                velocity.y = _gravity + airFriction;
+                _CharacterRigidbody.velocity = velocity;
+            }
+
+            if (_jumpForceRuntime <= 0f) return;
+
+            // JUMPING
+            if (_CharacterRigidbody.velocity.y > 0f) _jumpForceRuntime = _CharacterRigidbody.velocity.y;
+            else _jumpForceRuntime = 0f;
+        }
+
+        private bool _previousStrafe;
+
+        protected virtual void Rotate(float _deltaTime)
         {
             if (_CharacterRigidbody == null) return;
             if (isStrafe && _camBrain == null) return;
-
-            bool isStrafeRuntime = isThirdPerson == false || isStrafe;
 
             if (isStrafeRuntime != _previousStrafe && isStrafeRuntime == false) _moveDirection = math.mul(Quaternion.AngleAxis(Helper.GetYawOfQuaternion(_PreProcessorTransform.rotation), Helper.Up), Helper.Forward);
             _previousStrafe = isStrafeRuntime;
@@ -251,15 +268,14 @@ namespace GameDevWithLukas
             }
         }
 
-        void Drag(float _deltaTime)
+        protected virtual void Drag(float _deltaTime)
         {
             if (_CharacterRigidbody == null) return;
 
             // MOVE
             if (_CharacterRigidbody.drag != 0f) _CharacterRigidbody.drag = 0f;
             float3 wantedVel = Helper.Up * _CharacterRigidbody.velocity.y;
-            if (_isGrounded) _CharacterRigidbody.velocity = math.lerp(_CharacterRigidbody.velocity, wantedVel, math.clamp(_moveGroundDrag * _deltaTime, 0f, 1f));
-            else if (!_isGrounded) _CharacterRigidbody.velocity = math.lerp(_CharacterRigidbody.velocity, wantedVel, math.clamp(_moveAirDrag * _deltaTime, 0f, 1f));
+            if (!_isGrounded) _CharacterRigidbody.velocity = math.lerp(_CharacterRigidbody.velocity, wantedVel, math.clamp(_moveAirDrag * _deltaTime, 0f, 1f));
 
             // ROTATE
             if (_CharacterRigidbody.angularDrag != _rotateDrag) _CharacterRigidbody.angularDrag = _rotateDrag;
